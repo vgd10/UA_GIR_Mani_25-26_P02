@@ -19,5 +19,5 @@ pip install --user ipykernel && python -m ipykernel install --user --name=mani
 
 -(DON'T USE, NEEDS MORE TESTING) To uninstall env from jupyter notebook:
 ```cmd
-jupyter kernelspec uninstall mani && conda deactivate && conda remove -n mani --all -y
+jupyter kernelspec uninstall -y mani && conda deactivate && conda remove -n mani --all -y
 ```
