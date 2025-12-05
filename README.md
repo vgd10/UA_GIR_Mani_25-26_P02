@@ -11,13 +11,13 @@ conda create -n mani -y python=3.11.14 && conda activate mani
 pip install --upgrade pip setuptools wheel && pip install gymnasium "gymnasium[classic_control]" && conda install -y swig && pip install "gymnasium[box2d]" matplotlib
 ```
 
--Set conda environment to be added to jupyter notebook:
+-Set conda environment to be added to jupyter notebook (Then on the app change the kernel):
 ```cmd
 pip install --user ipykernel && python -m ipykernel install --user --name=mani
 ```
 
 
--(DON'T USE, NEEDS MORE TESTING) To uninstall env from jupyter notebook:
+-To uninstall env from jupyter notebook and delete conda env:
 ```cmd
 jupyter kernelspec uninstall -y mani && conda deactivate && conda remove -n mani --all -y
 ```
