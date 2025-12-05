@@ -16,6 +16,8 @@ episodes = 2000
 
 # Discretización de estados
 bins = 10
+
+# Estado -> x,y,vx,vy,angle,w,contactopata1,contactopata2
 state_bins = [
     np.linspace(-1.5, 1.5, bins),
     np.linspace(-1.5, 1.5, bins),
@@ -36,7 +38,7 @@ def discretize(state):
             disc.append(int(state[i]))
     return tuple(disc)
 
-# Q-table
+# Q-table (x,y,vx,vy,angle,w) (patas) (acciones, 4)
 Q = np.zeros([bins+1] * 6 + [2, 2] + [env.action_space.n])
 
 # Política de acción
