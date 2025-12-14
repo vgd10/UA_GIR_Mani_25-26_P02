@@ -4,6 +4,7 @@ import random
 import matplotlib.pyplot as plt
 import pickle
 import time
+import argparse
 
 # Crear entorno
 env = gym.make("LunarLander-v3", render_mode=None)
@@ -19,6 +20,11 @@ epsilon_decay = 0.995  # multiplicativo por episodio
 alpha_start = 0.5
 alpha_min = 0.05
 alpha_decay = 0.995  # multiplicativo por episodio
+
+# Parámetros Softmax (Boltzmann)
+temperature_start = 1.0
+temperature_min = 0.1
+temperature_decay = 0.995
 
 max_episodes = 20000  # límite superior; se usa parada temprana
 target_mean_reward = 200  # objetivo estándar para LunarLander
@@ -57,8 +63,17 @@ def epsilon_greedy(state, epsilon):
         return env.action_space.sample()
     return int(np.argmax(Q[state]))
 
+
+def softmax_action(state, temperature):
+    q_values = Q[state]
+    # Evitar overflow: restar el max
+    z = (q_values - np.max(q_values)) / max(temperature, 1e-6)
+    probs = np.exp(z)
+    probs /= np.sum(probs)
+    return int(np.random.choice(len(q_values), p=probs))
+
 # Entrenamiento
-def train():
+def train(policy="epsilon-greedy"):
     random.seed(42)
     np.random.seed(42)
 
@@ -68,6 +83,7 @@ def train():
 
     epsilon = epsilon_start
     alpha = alpha_start
+    temperature = temperature_start
 
     start_time = time.time()
 
@@ -80,8 +96,13 @@ def train():
         truncated = False
 
         while not (terminated or truncated):
-            # Acción con política epsilon-greedy
-            action = epsilon_greedy(state, epsilon)
+            # Acción según política solicitada
+            if policy == "epsilon-greedy":
+                action = epsilon_greedy(state, epsilon)
+            elif policy == "softmax":
+                action = softmax_action(state, temperature)
+            else:
+                raise ValueError("Política no soportada. Usa 'epsilon-greedy' o 'softmax'.")
             next_state, reward, terminated, truncated, _ = env.step(action)
             next_state = discretize(next_state)
 
@@ -98,9 +119,10 @@ def train():
 
         rewards.append(total)
 
-        # Decaimiento de epsilon y alpha
+        # Decaimiento de parámetros
         epsilon = max(epsilon_min, epsilon * epsilon_decay)
         alpha = max(alpha_min, alpha * alpha_decay)
+        temperature = max(temperature_min, temperature * temperature_decay)
 
         # Estadísticas y parada temprana por media móvil
         if len(rewards) >= window:
@@ -117,7 +139,7 @@ def train():
             elapsed = time.time() - start_time
             print(
                 f"Episodio {ep} | Recompensa {total:.1f} | Media({min(len(rewards), window)}) "
-                f"{mean_recent:.1f} | eps {epsilon:.3f} | alpha {alpha:.3f} | t {elapsed/60:.1f}m"
+                f"{mean_recent:.1f} | eps {epsilon:.3f} | temp {temperature:.3f} | alpha {alpha:.3f} | t {elapsed/60:.1f}m"
             )
 
     # Guardar el mejor modelo disponible
@@ -144,7 +166,16 @@ def plot_rewards(rewards):
 
 
 def main():
-    rewards = train()
+    parser = argparse.ArgumentParser(description="Entrenar Q-Learning LunarLander")
+    parser.add_argument("--policy", choices=["epsilon-greedy", "softmax"], default="epsilon-greedy", help="Política de selección de acciones")
+    parser.add_argument("--episodes", type=int, default=None, help="Sobrescribir max_episodes si se indica")
+    args = parser.parse_args()
+
+    global max_episodes
+    if args.episodes is not None:
+        max_episodes = int(args.episodes)
+
+    rewards = train(policy=args.policy)
     plot_rewards(rewards)
     env.close()
 
