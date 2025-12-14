@@ -9,22 +9,32 @@ import time
 env = gym.make("LunarLander-v3", render_mode=None)
 
 # Hiperparámetros
-alpha = 0.1
 gamma = 0.99
-epsilon = 0.1
-episodes = 2000
+
+# Parámetros de entrenamiento (con decaimiento)
+epsilon_start = 1.0
+epsilon_min = 0.05
+epsilon_decay = 0.995  # multiplicativo por episodio
+
+alpha_start = 0.5
+alpha_min = 0.05
+alpha_decay = 0.995  # multiplicativo por episodio
+
+max_episodes = 20000  # límite superior; se usa parada temprana
+target_mean_reward = 200  # objetivo estándar para LunarLander
+window = 100  # tamaño de ventana para media móvil
 
 # Discretización de estados
-bins = 10
+bins = 12
 
 # Estado -> x,y,vx,vy,angle,w,contactopata1,contactopata2
 state_bins = [
-    np.linspace(-1.5, 1.5, bins),
-    np.linspace(-1.5, 1.5, bins),
-    np.linspace(-2, 2, bins),
-    np.linspace(-2, 2, bins),
+    np.linspace(-1.2, 1.2, bins),
+    np.linspace(-1.2, 1.2, bins),
+    np.linspace(-2.0, 2.0, bins),
+    np.linspace(-2.0, 2.0, bins),
     np.linspace(-3.14, 3.14, bins),
-    np.linspace(-5, 5, bins),
+    np.linspace(-5.0, 5.0, bins),
     np.array([0, 1]),
     np.array([0, 1])
 ]
@@ -42,50 +52,102 @@ def discretize(state):
 Q = np.zeros([bins+1] * 6 + [2, 2] + [env.action_space.n])
 
 # Política de acción
-def epsilon_greedy(state):
-    if random.uniform(0,1) < epsilon:
+def epsilon_greedy(state, epsilon):
+    if random.uniform(0, 1) < epsilon:
         return env.action_space.sample()
-    return np.argmax(Q[state])
+    return int(np.argmax(Q[state]))
 
 # Entrenamiento
-rewards = []
+def train():
+    random.seed(42)
+    np.random.seed(42)
 
-for ep in range(episodes):
-    state, _ = env.reset()
-    state = discretize(state)
-    total = 0
+    rewards = []
+    best_mean = -np.inf
+    best_Q = None
 
-    terminated = False
-    truncated = False
+    epsilon = epsilon_start
+    alpha = alpha_start
 
-    while not (terminated or truncated):
-        action = epsilon_greedy(state)
-        next_state, reward, terminated, truncated, _ = env.step(action)
-        next_state = discretize(next_state)
+    start_time = time.time()
 
-        best = np.argmax(Q[next_state])
+    for ep in range(1, max_episodes + 1):
+        state, _ = env.reset()
+        state = discretize(state)
+        total = 0.0
 
-        Q[state][action] += alpha * (reward + gamma * Q[next_state][best] - Q[state][action])
+        terminated = False
+        truncated = False
 
-        state = next_state
-        total += reward
+        while not (terminated or truncated):
+            # Acción con política epsilon-greedy
+            action = epsilon_greedy(state, epsilon)
+            next_state, reward, terminated, truncated, _ = env.step(action)
+            next_state = discretize(next_state)
 
-    rewards.append(total)
+            # Mejor acción en siguiente estado
+            best_next = int(np.argmax(Q[next_state]))
 
-    if ep % 100 == 0:
-        print(f"Episodio {ep} - Recompensa: {total}")
+            # Actualización Q-Learning
+            td_target = reward + gamma * Q[next_state][best_next]
+            td_error = td_target - Q[state][action]
+            Q[state][action] += alpha * td_error
 
-# Guardar modelo
-with open("lunarlander_qtable.pkl", "wb") as f:
-    pickle.dump(Q, f)
+            state = next_state
+            total += reward
 
-print("\nModelo guardado como lunarlander_qtable.pkl\n")
+        rewards.append(total)
 
-# Gráfico de recompensas
-plt.plot(rewards)
-plt.xlabel("Episodios")
-plt.ylabel("Recompensa")
-plt.title("Aprendizaje con Q-Learning - LunarLander")
-plt.show()
+        # Decaimiento de epsilon y alpha
+        epsilon = max(epsilon_min, epsilon * epsilon_decay)
+        alpha = max(alpha_min, alpha * alpha_decay)
 
-env.close()
+        # Estadísticas y parada temprana por media móvil
+        if len(rewards) >= window:
+            mean_recent = np.mean(rewards[-window:])
+            if mean_recent > best_mean:
+                best_mean = mean_recent
+                best_Q = Q.copy()
+            if mean_recent >= target_mean_reward:
+                print(f"Parada temprana en episodio {ep}: media {mean_recent:.2f}")
+                break
+
+        if ep % 100 == 0:
+            mean_recent = np.mean(rewards[-min(len(rewards), window):])
+            elapsed = time.time() - start_time
+            print(
+                f"Episodio {ep} | Recompensa {total:.1f} | Media({min(len(rewards), window)}) "
+                f"{mean_recent:.1f} | eps {epsilon:.3f} | alpha {alpha:.3f} | t {elapsed/60:.1f}m"
+            )
+
+    # Guardar el mejor modelo disponible
+    to_save = best_Q if best_Q is not None else Q
+    with open("lunarlander_qtable.pkl", "wb") as f:
+        pickle.dump(to_save, f)
+    print("\nModelo guardado como lunarlander_qtable.pkl\n")
+
+    return rewards
+
+
+def plot_rewards(rewards):
+    plt.figure(figsize=(8, 4))
+    plt.plot(rewards, label="Recompensa por episodio", alpha=0.7)
+    if len(rewards) > window:
+        mv = np.convolve(rewards, np.ones(window)/window, mode='valid')
+        plt.plot(range(window-1, window-1+len(mv)), mv, label=f"Media móvil ({window})")
+    plt.xlabel("Episodios")
+    plt.ylabel("Recompensa")
+    plt.title("Aprendizaje con Q-Learning - LunarLander")
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+
+def main():
+    rewards = train()
+    plot_rewards(rewards)
+    env.close()
+
+
+if __name__ == "__main__":
+    main()
