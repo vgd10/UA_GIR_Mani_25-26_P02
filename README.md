@@ -21,3 +21,8 @@ pip install --user ipykernel && python -m ipykernel install --user --name=mani
 ```cmd
 jupyter kernelspec uninstall -y mani && conda deactivate && conda remove -n mani --all -y
 ```
+
+## Other links
+
+Another repo with this example solved: <br/>
+https://github.com/IgorComune/reinforcement_learning_lunar_lander_v3
