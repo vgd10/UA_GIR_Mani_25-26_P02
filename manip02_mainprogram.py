@@ -239,11 +239,11 @@ for envnumber in range(envtotal):
 
                     start_time = time.time()
 
-                    print(alpha,gamma,v_policy,episodes)
+                    # print(alpha,gamma,v_policy,episodes)
 
                     # Training phase
                     for episode in range(1,episodes+1):
-                        break
+                        # break
 
                         # Environment reset
                         state, _ =env.reset()
